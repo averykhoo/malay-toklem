@@ -1,0 +1,613 @@
+#!/usr/bin/perl -w
+
+
+
+$HOME=".";
+
+
+
+
+$FILES = '*';
+
+
+
+
+$VERBOSE = 0;
+$BATCH = 0;
+
+
+$LEMMALIST = 1;
+$WORDLIST = 1;
+$POS_CONSTRAINT = 1;
+$RULES = 1;
+
+
+$VERB = 1;
+$NOUN = 2;
+$ADJ = 3;
+$FWORD = 4;
+
+
+
+
+$NOMATCH = 0;
+$POSMATCH_N = 1;
+$POSMATCH_J = 2;
+$WORDMATCH = 3;
+$POSMATCH_V = 4;
+#$LEMMAMATCH = 5;
+
+
+
+
+$EOLN = "\r\n";
+
+
+
+$VOWEL = '[aeiou]';
+$CONSONANT = '[bcdfghjklmnpqrstvwxyz]';
+
+
+
+
+$LEMMAJOIN = '_';   # must be single character
+$LEMMASEP = ' ';   # must be single character
+$WORDSEP = "\t";   # must be single character
+
+
+
+
+$FPIN = '-';
+$FPOUT = '>-';
+
+
+use Getopt::Long;
+
+# Get Command-Line options.
+GetOptions("<>" => sub{$FPIN = $_[0]},
+	   "i=s" => \$FPIN,
+	   "o=s" => \$FPOUT,
+	   "v" => \$VERBOSE,
+	   "no_list" => sub{$LEMMALIST = 0},
+	   "b" => \$BATCH,
+	   "eval" => sub {$FILES = '{00UM_Arts1.txt,00UM_Arts5.txt,00UM_Arts9.txt,00UM_Econ10.txt,00UM_Econ4.txt,00UM_Law10.txt,00UM_Law12.txt,00UM_Law7.txt,01UM_Ed24.txt,01UM_Ed26.txt,01UM_Ed32.txt,01UM_Ed33.txt,01UM_H7.txt,01UM_Sprt2.txt,01UM_Sprt6.txt,UM_R7.txt,UM_R8.txt,UM_SES43.txt,UM_SES62.txt}'; $BATCH = 1;},
+           );
+
+
+
+
+
+
+
+
+
+$WORDLEMMAPOS = "word-lemma-pos";
+open WORDLEMMAPOS or die "ERROR: Couldn't open $WORDLEMMAPOS: $!\n";
+
+while (<WORDLEMMAPOS>)
+{
+    chomp;
+    /^([^$WORDSEP]+)$WORDSEP([^$WORDSEP]+)$WORDSEP([^$WORDSEP]+)$/o or die "ERROR: unrecognised format in $WORDLEMMAPOS -- $_\n";
+#    print "$1 $2 $3\n";
+    $word_lemma_pos{lc($1)}{$2}{&convertpos($3)} = 1;
+}
+
+close WORDLEMMAPOS;
+
+
+
+
+
+$WORDPOS = "word-pos";
+open WORDPOS or die "ERROR: Couldn't open $WORDPOS: $!\n";
+
+while (<WORDPOS>)
+{
+    my($word,$pos) = split /\t/;
+    $word_pos{lc($word)}{&convertpos($pos)} = 1;
+}
+
+close WORDPOS;
+
+
+
+
+if ($BATCH)
+{
+    $CORPUSDIR = "$HOME/stokeniser.out/";
+    $LEMMAOUTDIR = "$HOME/lemmatiser.out/";
+
+    while ($FPIN = <$CORPUSDIR/$FILES>)
+    {
+	print STDERR "Lemmatising $FPIN ....\n";
+
+	$FPIN =~ /.*\/(.+)/ or die;
+	$FPOUT = ">$LEMMAOUTDIR$1";
+
+	&file_lemmatise($FPIN,$FPOUT);
+    }
+}
+else
+{
+    &file_lemmatise($FPIN,$FPOUT);
+}
+
+
+
+
+
+
+
+
+sub file_lemmatise
+{
+    ($IN,$OUT) = @_;
+
+    open IN or die "Couldn't open $IN: $!\n";
+    open OUT or die "ERROR: Couldn't open $OUT: $!\n";
+
+    while (<IN>)
+    {
+	#remove EOLN characters
+	s/\r\n//;
+	chomp;
+
+	#remove punctuation
+#	s/([,\.\?\!\:\;\"\(\)]|``|'')//g;
+#	s/ +/ /g;
+
+#	print "$_\n";
+	my $out = '';
+	foreach my $word (split / /)
+	{
+	    #remove pairings of string-intial and string-final quotes
+	    $word =~ s/^[\'\`](\S+)\'$/$1/;
+
+	    $out .= &disambiguate_lemma(&lemmatise($word)) . $LEMMASEP;
+
+	}
+	$out =~ s/$LEMMASEP$//o;
+	print OUT "$out$EOLN";
+    }
+
+    close IN;
+    close OUT;
+}
+
+
+
+
+
+sub disambiguate_lemma
+{
+    my $in = shift;
+    my $bestlemma = '';
+    my $bestlen = 1000;
+
+    foreach my $lemma (split $LEMMAJOIN, $in)
+    {
+	my $lemmalen = length($lemma);
+	if ($lemmalen < $bestlen)
+	{
+	    $bestlemma = $lemma;
+	    $bestlen = $lemmalen;
+	}
+    }
+    return $bestlemma;
+}
+
+
+
+
+
+
+sub lemmatise
+{
+    my $word = shift;
+    my $lemma;
+    my $confidence;
+    my $wordlist_found = 0;
+
+
+    $word =~ tr/[A-Z]/[a-z]/;
+    if ($LEMMALIST and defined $word_lemma_pos{$word})
+    {
+	foreach (keys %{$word_lemma_pos{$word}})
+	{
+#	    print "$word -> $_\n";
+	    $lemma .= $_ . $LEMMAJOIN;
+	}
+	chop $lemma;
+	
+	return $lemma;
+    }
+
+    if ($WORDLIST and defined $word_pos{$word})
+    {
+	$wordlist_found = 1;
+	return $word if defined $word_pos{$word}{$FWORD};
+    }
+
+    my $orig = $word;
+    if ($word =~ /(.+?)-(.+)/)
+    {
+	my($part1,$part2) = ($1,$2);
+	my $suff = '';
+	while (1)
+	{
+	    $word = $part1 . $suff, last if ($part1 =~ /$part2$/);
+	    $suff = chop($part2) . $suff;
+	    last unless $part2;
+	}
+	return $word if $part1 eq $part2 and defined $word_pos{$part1};
+#	print STDERR "$orig => $word\n";
+    }
+
+    if ($RULES)
+    {
+	($lemma,$confidence) = &lemmatise_word($word);
+	if ($WORDLIST and $wordlist_found and $confidence < $WORDMATCH)
+	{
+	    return $word;
+	}
+	return $lemma
+    }
+
+    return $word;
+}
+
+
+
+
+
+
+sub lemmatise_word
+{
+    my $word = shift;
+    local @agenda;
+    
+#    print "LEMMATISE VERB\n";
+
+    push @agenda, $word;
+    if ($POS_CONSTRAINT and defined $word_pos{$word})
+    {
+	if (defined $word_pos{$word}{$VERB})
+	{
+	    $pos{$word}{$VERB} = 1;
+	}
+	if (defined $word_pos{$word}{$NOUN})
+	{
+	    $pos{$word}{$NOUN} = 1;
+	}
+	if (defined $word_pos{$word}{$ADJ})
+	{
+	    $pos{$word}{$ADJ} = 1;
+	}
+	if (defined $word_pos{$word}{$FWORD})
+	{
+	    $pos{$word}{$FWORD} = 1;
+	}
+    }
+    else
+    {
+	$pos{$word}{$VERB} = $pos{$word}{$NOUN} = $pos{$word}{$ADJ} = 1;
+    }
+
+
+    # First strip suffixes
+
+    if (0)
+    {
+	for ($i = 0; $i <= $#agenda; $i++)
+	{
+	    my $string = my $orig = $agenda[$i];
+
+	    if ($string =~ s/an$// and $string =~ /$VOWEL/o)
+	    {
+		&agenda_rec($string,$orig,$NOUN,$NOUN);
+		if ($string =~ s/k$//)
+		{
+		    &agenda_rec($string,$orig,$VERB,$VERB);
+		}
+	    }
+	    elsif ($string =~ s/^((me|pe|di).+)i$/$1/  and $string =~ /$VOWEL/o)
+	    {
+		&agenda_rec($string,$orig,$VERB,$VERB);
+	    }
+	    elsif ($string =~ s/[km]u$//  and $string =~ /$VOWEL/o)
+	    {
+		&agenda_rec($string,$orig,$VERB,$VERB);
+	    }
+	    elsif ($string =~ s/[kl]ah$//  and $string =~ /$VOWEL/o)
+	    {
+		&agenda_rec($string,$orig,$VERB,$VERB);
+	    }
+	    elsif ($string =~ s/nya$//  and $string =~ /$VOWEL/o)
+	    {
+		&agenda_rec($string,$orig,$VERB,$VERB);
+	    }
+	}
+    }
+    else
+    {
+	my $string = $agenda[0];
+	if ($string =~ /(.+?)an$/)
+	{
+	    my $prefix = $1;
+	    &agenda_rec($1,$string,$NOUN,$NOUN) if &lemmalike($prefix);
+	}
+
+	if ($string =~ /^((me|di).+?)(kan|i)(nya)?$/)
+	{
+	    my $prefix = $1;
+	    &agenda_rec($prefix,$string,$VERB,$VERB) if &lemmalike($prefix);
+	}
+
+	if ($string =~ /^(pe.+?)(kan|i)$/)
+	{
+	    my $prefix = $1;
+	    &agenda_rec($prefix,$string,$VERB,$VERB) if &lemmalike($prefix);
+	}
+
+	if ($string =~ /^(be.+?)(kan|nya)$/)
+	{
+	    my $prefix = $1;
+	    &agenda_rec($prefix,$string,$VERB,$VERB) if &lemmalike($prefix);
+	}
+
+	if ($string =~ /(.+?)nya$/)
+	{
+	    my $prefix = $1;
+	    &agenda_rec($prefix,$string,$VERB,$VERB) if &lemmalike($prefix);
+	}
+
+	if ($string =~ /(.+?)[kl]ah$/)
+	{
+	    my $prefix = $1;
+	    &agenda_rec($prefix,$string,$VERB,$VERB) if &lemmalike($prefix);
+	}
+
+	if ($string =~ /(.+?)[km]u$/)
+	{
+	    my $prefix = $1;
+	    &agenda_rec($prefix,$string,$VERB,$VERB) if &lemmalike($prefix);
+	}
+
+}
+
+
+    # Next strip prefixes
+
+    for ($i = 0; $i <= $#agenda; $i++)
+    {
+	my $string = my $orig = $agenda[$i];
+#	print "AGENDA ... ($i -- $string)\n";
+
+	if ($string =~ s/^me//)
+	{
+	    if ($string =~ s/^m//)
+	    {
+		&agenda_rec($string,$orig,$VERB,$VERB);
+
+		&agenda_rec("f$string",$orig,$VERB,$VERB);
+
+		&agenda_rec("p$string",$orig,$VERB,$VERB);
+	    }
+	    elsif ($string =~ s/^n//)
+	    {
+		if ($string =~ /^$VOWEL/o)
+		{
+		    &agenda_rec("t$string",$orig,$VERB,$VERB);
+		}
+		elsif ($string =~ /^[cdjyz]/)
+		{
+		    &agenda_rec($string,$orig,$VERB,$VERB);
+		}
+		elsif ($string =~ s/^g//)
+		{
+		    if ($string =~ /^$VOWEL/o)
+		    {
+			&agenda_rec("k$string",$orig,$VERB,$VERB);
+			&agenda_rec($string,$orig,$VERB,$VERB);
+			&agenda_rec($string,$orig,$VERB,$VERB) if $string =~ s/^e//;
+		    }
+		    else
+		    {
+			&agenda_rec($string,$orig,$VERB,$VERB);
+		    }
+		}
+		elsif ($string =~ s/^y($VOWEL)/$1/o)
+		{
+		    &agenda_rec("s$string",$orig,$VERB,$VERB);
+		    &agenda_rec($string,$orig,$VERB,$VERB);
+		}
+		elsif ($string =~ s/^y//o)
+		{
+		    &agenda_rec($string,$orig,$VERB,$VERB);
+		}
+	    }
+	    elsif ($string =~ /^[lryw]/)
+	    {
+		&agenda_rec($string,$orig,$VERB,$VERB);
+	    }
+	}
+	elsif ($string =~ s/^pe//)
+	{
+	    if ($string =~ /^([lpw]|ny)/)
+	    {
+		&agenda_rec($string,$orig,$NOUN,$VERB);
+	    }
+	    elsif ($string =~ s/^r//)
+	    {
+		&agenda_rec($string,$orig,$NOUN,$VERB);
+		&agenda_rec($string,$orig,$VERB,$VERB);
+	    }
+	    elsif ($string =~ s/^m(.)//)
+	    {
+		my $next = $1;
+		if ($next =~ /$VOWEL/o)
+		{
+		    &agenda_rec("m$next$string",$orig,$NOUN,$VERB);
+		    &agenda_rec("f$next$string",$orig,$NOUN,$VERB);
+		}
+		else
+		{
+		    &agenda_rec("$next$string",$orig,$NOUN,$VERB);
+		}
+	    }
+	    elsif ($string =~ s/^n(.)//)
+	    {
+		my $next = $1;
+		if ($next eq 'g')
+		{
+		    $string =~ s/^(.)//;
+		    $next = $1;
+		    &agenda_rec($string,$orig,$VERB,$VERB);
+		    if ($next eq 'e')
+		    {
+			&agenda_rec("k$string",$orig,$VERB,$VERB);
+		    }
+		}
+		elsif ($next eq 'y')
+		{
+		    &agenda_rec("s$string",$orig,$VERB,$VERB);
+		}
+		elsif ($next =~ /$VOWEL/o)
+		{
+		    &agenda_rec("m$next$string",$orig,$VERB,$VERB);
+		    &agenda_rec("t$next$string",$orig,$VERB,$VERB);
+		}
+		else
+		{
+		    &agenda_rec("$next$string",$orig,$VERB,$VERB);
+		}
+	    }
+	}
+	elsif ($string =~ s/^be//)
+	{
+	    &agenda_rec($string,$orig,$VERB,$VERB);
+	    if ($string =~ s/^l//)
+	    {
+		&agenda_rec($string,$orig,$VERB,$VERB);
+	    }
+	    elsif ($string =~ s/^r//)
+	    {
+		&agenda_rec($string,$orig,$VERB,$VERB);
+	    }
+	}
+	elsif ($string =~ s/^ke//)
+	{
+	    &agenda_rec($string,$orig,$NOUN,$NOUN);
+	    &agenda_rec($string,$orig,$ADJ,$ADJ);
+#	    &agenda_rec($string,$orig,$VERB,$VERB);
+	}
+	elsif ($string =~ s/^di//)
+	{
+	    &agenda_rec($string,$orig,$VERB,$VERB);
+	}
+	elsif ($string =~ s/^ter//)
+	{
+	    &agenda_rec($string,$orig,$ADJ,$ADJ);
+	    &agenda_rec($string,$orig,$VERB,$VERB);
+	    &agenda_rec("r$string",$orig,$VERB,$VERB);
+	}
+	elsif ($string =~ s/^se-?//)
+	{
+	    &agenda_rec($string,$orig,$NOUN,$NOUN);
+	}
+	elsif ($string =~ s/^ke//)
+	{
+	    &agenda_rec($string,$orig,$NOUN,$NOUN);
+	}
+    }
+
+
+
+    my $bestmatch = $NOMATCH;
+    my $bestlen = length($word);
+    my $bestlemma = shift @agenda;
+    foreach my $currlemma (@agenda)
+    {
+	print "\t$word ==> $currlemma\n" if $VERBOSE;
+	my $currlen = length($currlemma);
+	next unless $currlen;
+	my $currmatch = $NOMATCH;
+	if (defined $word_pos{$currlemma}{$VERB})
+	{
+	    $currmatch = $POSMATCH_V;
+	}
+	elsif (defined $word_pos{$currlemma}{$ADJ})
+	{
+	    $currmatch = $POSMATCH_J;
+	}
+	elsif (defined $word_pos{$currlemma}{$NOUN})
+	{
+	    $currmatch = $POSMATCH_N;
+	}
+
+	if ($currmatch > $bestmatch)
+	{
+	    $bestlemma = $currlemma;
+	    $bestlen = $currlen;
+	    $bestmatch = $currmatch;
+	}
+	elsif ($currmatch == $bestmatch)
+	{
+	    if ($currlen < $bestlen)
+	    {
+		$bestlemma = $currlemma;
+		$bestlen = $currlen;
+	    }
+	    elsif ($currlen == $bestlen)
+	    {
+		next if $bestlemma =~ /(^|$LEMMAJOIN)$currlemma($LEMMAJOIN|$)/;
+		$bestlemma .= $LEMMAJOIN . $currlemma;
+	    }
+	}
+    }
+
+    undef @agenda;
+    
+    return($bestlemma,$bestmatch);
+}
+
+
+
+
+
+
+sub agenda_rec
+{
+    my($string,$orig,$frompos,$topos) = @_;
+
+    return unless defined $pos{$orig}{$frompos};
+    $pos{$string}{$topos} = 1;
+    push @agenda, $string;
+    return;
+}
+
+
+
+
+
+sub convertpos
+{
+    my $pos = shift;
+
+    return $VERB if $pos =~ /^V/;
+    return $NOUN if $pos =~ /^N/;
+    return $ADJ if $pos =~ /^J/;
+    return $FWORD;
+}
+
+
+
+
+
+sub lemmalike
+{
+    my $in = shift;
+
+    return 1 if $in =~ /$CONSONANT$VOWEL/o or $in =~ /$VOWEL$CONSONANT/o ;
+    return 0;
+}
