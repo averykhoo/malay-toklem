@@ -1,13 +1,26 @@
 #!/usr/bin/perl -w
 
 
+################################################################################
+#
+# Author: Tim Baldwin
+#
+# Synposis: evaluate the lemmatiser output
+#
+# License: LGPL (see http://malay-toklem.googlecode.com/)
+#
+# Usage: see README
+#
+################################################################################
+
+
+
 
 $HOME=".";
 
 
 
 
-$FILES = '*';
 
 
 
@@ -68,9 +81,9 @@ GetOptions("<>" => sub{$FPIN = $_[0]},
 	   "i=s" => \$FPIN,
 	   "o=s" => \$FPOUT,
 	   "v" => \$VERBOSE,
-	   "no_list" => sub{$LEMMALIST = 0},
+	   "nolem" => sub{$LEMMALIST = 0},
 	   "b" => \$BATCH,
-	   "eval" => sub {$FILES = '{00UM_Arts1.txt,00UM_Arts5.txt,00UM_Arts9.txt,00UM_Econ10.txt,00UM_Econ4.txt,00UM_Law10.txt,00UM_Law12.txt,00UM_Law7.txt,01UM_Ed24.txt,01UM_Ed26.txt,01UM_Ed32.txt,01UM_Ed33.txt,01UM_H7.txt,01UM_Sprt2.txt,01UM_Sprt6.txt,UM_R7.txt,UM_R8.txt,UM_SES43.txt,UM_SES62.txt}'; $BATCH = 1;},
+	   "eval" => sub {$FPIN = 'eval/corpora/corpus.tokenised'; $FPOUT = 'lemmatiser.out'; $BATCH = 1;},
            );
 
 
@@ -114,15 +127,14 @@ close WORDPOS;
 
 if ($BATCH)
 {
-    $CORPUSDIR = $FPIN;
-    $LEMMAOUTDIR = $FPOUT;
+    die "ERROR: must define both input directory (-i) and output directory (-o) in batch mode" unless -d $FPOUT and -d $FPIN;
 
-    while (my $IN = <$CORPUSDIR/$FILES>)
+    while (my $IN = <$FPIN/*>)
     {
 	print STDERR "Lemmatising $IN ....\n";
 
 	$IN =~ /.*\/(.+)/ or die;
-	my $OUT = ">$LEMMAOUTDIR$1";
+	my $OUT = ">$FPOUT/$1";
 
 	&file_lemmatise($IN,$OUT);
     }

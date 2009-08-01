@@ -1,0 +1,90 @@
+#!/usr/bin/perl -w
+
+
+################################################################################
+#
+# Author: Tim Baldwin
+#
+# Synposis: word and sentence tokenise a Malay text
+#
+# License: LGPL (see http://malay-toklem.googlecode.com/)
+#
+# Usage: see README
+#
+################################################################################
+
+
+
+
+$HOME=".";
+
+
+
+
+
+
+$BATCH = 0;
+
+
+
+$FPIN = "-";
+
+
+
+
+use Getopt::Long;
+
+# Get Command-Line options.
+GetOptions("<>" => sub{$FPIN = $_[0]},
+	   "i=s" => \$FPIN,
+	   "o=s" => \$FPOUT,
+	   "b" => \$BATCH,
+	   "eval" => sub {$FPIN = "$HOME/eval/corpora/corpus.orig"; $BATCH = 1;},
+           );
+
+
+
+
+
+
+
+
+if ($BATCH)
+{
+    die "ERROR: must define both input directory (-i) and output directory (-o) in batch mode" unless -d $FPOUT and -d $FPIN;
+
+    while (my $IN = <$FPIN/*>)
+    {
+	print STDERR "Sentence tokenising $IN ....\n";
+
+	$IN =~ /.*\/(.+)/ or die;
+	my $OUT = "$FPOUT/$1";
+
+	&file_tokenise($IN,$OUT);
+    }
+}
+else
+{
+    &file_tokenise($FPIN,$FPOUT);
+}
+
+
+
+
+
+
+
+
+sub file_tokenise
+{
+    ($IN,$OUT) = @_;
+
+    if (defined $OUT)
+    {
+	system("cat $IN | $HOME/token > $OUT");
+    }
+    else
+    {
+	system("cat $IN | $HOME/token ");
+    }
+}

@@ -2,16 +2,10 @@
 /* Flex tokeniser and sentence boundary finder for Malay text in plain
    ASCII or Latin-1 (8-bit) format.
  
-   (c) Tim Baldwin, University of Melbourne, 2009
+   Author: Tim Baldwin, University of Melbourne
 
    Adapted from code by John Carroll, in turn adapted from code by Guido
    Minnen, Erik Hektoen, and Greg Grefenstette.
-
-   Example compilation/test command lines:
-     $ flex token.flex                 - compiling the flex code
-     $ gcc lex.yy.c -lfl -o token      - compiling the C code
-     $ rm lex.yy.c                     - deleting the intermediate file
-     $ token < token.test              - testing the executable file
 
    All control chars, as well as space and Latin-1 non-breakable space, are
    regarded as whitespace.  This file consists only ASCII characters.  

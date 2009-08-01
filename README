@@ -1,0 +1,142 @@
+
+		      MALAY TOKENISER/LEMMATISER README
+
+			   Release: 1 August, 2009
+
+		      Author: Tim Baldwin (tb@ldwin.net)
+
+
+This is a (brief) README for the Malay tokeniser/lemmatiser described in:
+
+  Baldwin, Timothy and Su'ad Awab (2006) Open Source Corpus Analysis Tools for
+  Malay, In Proceedings of the 5th International Conference on Language
+  Resources and Evaluation (LREC2006), Genoa, Italy, pp. 2212-5.
+
+  URL: http://www.cs.mu.oz.au/~tim/pubs/lrec2006-malay.pdf
+
+For details of what the tokeniser and lemmatiser are intended to do, see the
+original paper.
+
+Note that the word-POS and word-lemma-POS lists distributed with these scripts
+are not those used in the original experiments, due to licensing
+restrictions. This means that the lemmatiser performance is below that
+reported in the original paper.
+
+If you publish research which makes use of the tokeniser/lemmatiser, please
+cite the following paper:
+
+  Baldwin, Timothy and Su'ad Awab (2006) Open Source Corpus Analysis Tools for
+  Malay, In Proceedings of the 5th International Conference on Language
+  Resources and Evaluation (LREC2006), Genoa, Italy, pp. 2212-5.
+
+
+Acknowledgements:
+
+This code was developed with considerable from Su'ad Awab, in terms of
+annotating the gold-standard data and providing the rules used in the
+lemmatiser. The tokeniser is based heavily on the rule-based tokeniser used in
+RASP, which was generously made available by John Carroll.
+
+
+
+       ---------------------------------------------------------------
+
+				    BUILD:
+
+       ---------------------------------------------------------------
+
+The tokeniser is a flex script, and requires the flex compiler (the "flex"
+package under Ubuntu, e.g.).
+
+
+1. Convert the flex script into C code:
+
+# flex token.flex
+
+This will produce a file called "lex.yy.c"
+
+
+2. Compile lex.yy.c using a standard C compiler:
+
+# gcc lex.yy.c -lfl -o token
+
+This will produce a binary file called "lex" which is called from within "stokeniser.prl"
+
+
+3. Remove lex.yy.c:
+
+# rm lex.yy.c
+
+
+
+
+       ---------------------------------------------------------------
+
+				    SIMPLE USAGE:
+
+       ---------------------------------------------------------------
+
+To word and sentence tokenise a file:
+
+# ./tokenise.prl FILE
+
+Sentence boundaries will be indicated with carat (^) characters.
+
+
+To lemmatise a (pre-tokenised) file:
+
+# ./lemmatise.prl FILE
+
+
+
+
+       ---------------------------------------------------------------
+
+			       ADVANCED USAGE:
+
+       ---------------------------------------------------------------
+
+./tokenise.prl [-i INPUT] [-o OUTPUT] [-b] [-eval]
+
+       -i INPUT   ==> tokenise the single file INPUT, or in batch/eval mode,
+          	      tokenise all files contained in the directory INPUT
+
+       -o OUTPUT  ==> save the tokenised output to the file OUPUT, or in batch/eval mode,
+          	      save the output for each file from the INPUT directory
+          	      in the OUTPUT directory, with the same file name
+
+       -b         ==> batch mode, i.e. tokenise all files in the given
+        	      INPUT directory (which must be provided with -i), and
+        	      save the output for each individual file to a file of
+        	      the same name in the OUTPUT directory (which must be
+        	      provided with -o)
+
+       -eval      ==> evaluation mode: tokenise all files in
+        	      "corpus.orig", and save the output to "tokeniser.out";
+        	      used to emulate the tokenisation evaluation described in
+        	      Baldwin and Awab (2006) [final numeric evaluation is via the
+        	      "eval/eval-tokeniser.prl" script]
+
+
+
+
+./lemmatise.prl [-i INPUT] [-o OUTPUT] [-v] [-nolem] [-b] [-eval]
+
+       -i INPUT   ==> lemmatise the single file INPUT, or in batch/eval mode,
+          	      lemmatise all files contained in the directory INPUT
+
+       -o OUTPUT  ==> save the lemmatised output to the file OUPUT, or in batch/eval mode,
+          	      save the output for each file from the INPUT directory
+          	      in the OUTPUT directory, with the same file name
+
+       -b         ==> batch mode, i.e. lemmatise all files in the given
+        	      INPUT directory (which must be provided with -i), and
+        	      save the output for each individual file to a file of
+        	      the same name in the OUTPUT directory (which must be
+        	      provided with -o)
+
+       -eval      ==> evaluation mode: lemmatise all files in "eval/corpora/corpus.tokenised",
+        	      and save the output to "lemmatiser.out";
+        	      used to emulate the lemmatisation evaluation described in
+        	      Baldwin and Awab (2006) [final numeric evaluation is via the
+        	      "eval/eval-lemmatiser.prl" script]

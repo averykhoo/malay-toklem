@@ -1,0 +1,187 @@
+#!/usr/bin/perl -w
+
+
+################################################################################
+#
+# Author: Tim Baldwin
+#
+# Synposis: evaluate the lemmatiser output
+#
+# License: LGPL (see http://malay-toklem.googlecode.com/)
+#
+# Usage: see README
+#
+################################################################################
+
+
+
+
+
+$HOME = ".";
+
+
+$ORIGDIR = "$HOME/eval/corpora/corpus.orig/";
+
+$SYSOUTDIR = "$HOME/lemmatiser.out/";
+
+$GOLDDIR = "$HOME/eval/corpora/corpus.lemmatised/";
+
+
+
+
+
+$PRINT_TOKEN_MISMATCH = 0;
+$PRINT_TYPE_MISMATCH = 0;
+
+
+
+
+use Getopt::Long;
+
+# Get Command-Line options.
+GetOptions("<>" => sub{$SYSOUTDIR = $_[0]},
+	   "g=s" => \$GOLD,
+	   "s=s" => \$SYSOUT,
+	   "o=s" => \$ORIG,
+	   "token" => \$PRINT_TOKEN_MISMATCH,
+	   "type" => \$PRINT_TYPE_MISMATCH,
+           );
+
+
+
+
+
+if ($GOLD and $SYSOUT)
+{
+    &file_eval($GOLD,$SYSOUT,$ORIG);
+}
+else
+{
+    while ($GOLD = <$GOLDDIR/*.txt>)
+    {
+	print STDERR "$GOLD\n";
+	$GOLD =~ /.*\/(.+)_lma(\.txt)$/;
+	$SYSOUT = $SYSOUTDIR . $1 . $2;
+	$ORIG = $ORIGDIR . $1 . $2;
+	die "ERROR: Couldn't locate $SYSOUT\n" unless -f $SYSOUT;
+	die "ERROR: Couldn't locate $ORIG\n" unless -f $ORIG;
+
+	&file_eval($GOLD,$SYSOUT,$ORIG);
+    }
+}
+
+
+printf STDERR "Token accuracy: %.3f\n", $tokenmatch/$tokentotal;
+printf STDERR "Type accuracy: %.3f\n", $typematch/$typetotal;
+
+
+
+
+
+
+
+
+
+sub file_eval
+{
+    ($GOLD,$SYSOUT,$ORIG) = @_;
+
+    open GOLD or die;
+    open SYSOUT or die;
+    open ORIG or die;
+
+    $lineno = 1;
+    while ($lemmaline = <GOLD>)
+    {
+	$lemmaline = &remove_punctuation($lemmaline);
+
+	$sysoutline = <SYSOUT>;
+	die unless $sysoutline;
+	$sysoutline = &remove_punctuation($sysoutline);
+
+	$origline = <ORIG>;
+	die unless $origline;
+	$origline = &remove_punctuation($origline);
+
+	my @lemmas = split / /, $lemmaline;
+	my @sysoutwords = split / /, $sysoutline;
+	my @origwords = split / /, $origline;
+	if ($#lemmas == $#sysoutwords)
+	{
+	    for (my $i = 0; $i <= $#lemmas; $i++)
+	    {
+#		print "ERROR (line no. $lineno): lemma $lemmas[$i] longer than word $sysoutwords[$i]\n" if length($lemmas[$i]) > length($sysoutwords[$i]);
+
+		$tokentotal++;
+		if ($lemmas[$i] eq $sysoutwords[$i])
+		{
+		    $tokenmatch++;
+		}
+		elsif ($sysoutwords[$i] =~ /_/)
+		{
+		    my $totalcandidates = 0;
+		    my $candidatematch = 0;
+		    foreach (split /_/,$sysoutwords[$i])
+		    {
+			$totalcandidates++;
+			if ($_ eq $lemmas[$i])
+			{
+			    $candidatematch++;
+			}
+		    }
+		    $tokenmatch += $candidatematch/$totalcandidates;
+		}
+		else
+		{
+		    print "LEMMA MISMATCH (line no. $lineno): gold $lemmas[$i] <==> sysout $sysoutwords[$i]\n" if $PRINT_TOKEN_MISMATCH;
+		    $mismatch{"G:$lemmas[$i] <==> S:$sysoutwords[$i] (O:$origwords[$i])"}++ if $PRINT_TYPE_MISMATCH;
+		}
+		
+		unless (defined $seen{$lemmas[$i]}{$sysoutwords[$i]})
+		{
+		    $typetotal++;
+		    $typematch++ if $lemmas[$i] eq $sysoutwords[$i];
+		    $seen{$lemmas[$i]}{$sysoutwords[$i]} = 1;
+		}
+	    }
+	}
+	else
+	{
+	    print "ERROR (line no. $lineno): $#lemmas lemmas vs. $#sysoutwords words\n";
+	    print "\tGOLD = $lemmaline\n\n\tSYSOUT = $sysoutline\n\n";
+	}
+	$lineno++;
+    }
+
+    close GOLD;
+    close SYSOUT;
+}
+
+
+
+if ($PRINT_TYPE_MISMATCH)
+{
+    foreach (sort {$mismatch{$b} <=> $mismatch{$a}} keys %mismatch)
+    {
+	print "$_: $mismatch{$_}\n";
+    }
+}
+
+
+
+
+
+
+sub remove_punctuation
+{
+    my $in = shift;
+
+    $in =~ s/\^ //g;
+    $in =~ s/\r//;
+    chomp $in;
+    $in =~ s/[,\!\:\;\!\?\.\'\"\`\(\)\^]//g;
+    $in =~ s/ +/ /g;
+    $in =~ s/^ //;
+    $in =~ tr/[A-Z]/[a-z]/;
+    return $in;
+}
