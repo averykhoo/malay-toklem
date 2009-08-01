@@ -68,6 +68,12 @@ This will produce a binary file called "lex" which is called from within "stoken
 # rm lex.yy.c
 
 
+I have made a pre-compiled i86 Linux version of the "token" binary available
+for download at:
+
+http://malay-toklem.googlecode.com/files/token
+
+
 
 
        ---------------------------------------------------------------
