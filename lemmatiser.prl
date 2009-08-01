@@ -25,7 +25,7 @@ $RULES = 1;
 $VERB = 1;
 $NOUN = 2;
 $ADJ = 3;
-$FWORD = 4;
+$OTHER = 4;
 
 
 
@@ -81,7 +81,7 @@ GetOptions("<>" => sub{$FPIN = $_[0]},
 
 
 
-$WORDLEMMAPOS = "word-lemma-pos";
+$WORDLEMMAPOS = "$HOME/lexicons/word-lemma-pos";
 open WORDLEMMAPOS or die "ERROR: Couldn't open $WORDLEMMAPOS: $!\n";
 
 while (<WORDLEMMAPOS>)
@@ -98,7 +98,7 @@ close WORDLEMMAPOS;
 
 
 
-$WORDPOS = "word-pos";
+$WORDPOS = "$HOME/lexicons/word-pos";
 open WORDPOS or die "ERROR: Couldn't open $WORDPOS: $!\n";
 
 while (<WORDPOS>)
@@ -114,17 +114,17 @@ close WORDPOS;
 
 if ($BATCH)
 {
-    $CORPUSDIR = "$HOME/stokeniser.out/";
-    $LEMMAOUTDIR = "$HOME/lemmatiser.out/";
+    $CORPUSDIR = $FPIN;
+    $LEMMAOUTDIR = $FPOUT;
 
-    while ($FPIN = <$CORPUSDIR/$FILES>)
+    while (my $IN = <$CORPUSDIR/$FILES>)
     {
-	print STDERR "Lemmatising $FPIN ....\n";
+	print STDERR "Lemmatising $IN ....\n";
 
-	$FPIN =~ /.*\/(.+)/ or die;
-	$FPOUT = ">$LEMMAOUTDIR$1";
+	$IN =~ /.*\/(.+)/ or die;
+	my $OUT = ">$LEMMAOUTDIR$1";
 
-	&file_lemmatise($FPIN,$FPOUT);
+	&file_lemmatise($IN,$OUT);
     }
 }
 else
@@ -156,7 +156,6 @@ sub file_lemmatise
 #	s/([,\.\?\!\:\;\"\(\)]|``|'')//g;
 #	s/ +/ /g;
 
-#	print "$_\n";
 	my $out = '';
 	foreach my $word (split / /)
 	{
@@ -225,7 +224,7 @@ sub lemmatise
     if ($WORDLIST and defined $word_pos{$word})
     {
 	$wordlist_found = 1;
-	return $word if defined $word_pos{$word}{$FWORD};
+	return $word if defined $word_pos{$word}{$OTHER};
     }
 
     my $orig = $word;
@@ -283,9 +282,9 @@ sub lemmatise_word
 	{
 	    $pos{$word}{$ADJ} = 1;
 	}
-	if (defined $word_pos{$word}{$FWORD})
+	if (defined $word_pos{$word}{$OTHER})
 	{
-	    $pos{$word}{$FWORD} = 1;
+	    $pos{$word}{$OTHER} = 1;
 	}
     }
     else
@@ -597,7 +596,7 @@ sub convertpos
     return $VERB if $pos =~ /^V/;
     return $NOUN if $pos =~ /^N/;
     return $ADJ if $pos =~ /^J/;
-    return $FWORD;
+    return $OTHER;
 }
 
 
